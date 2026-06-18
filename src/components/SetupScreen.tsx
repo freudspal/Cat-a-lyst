@@ -27,11 +27,39 @@ export default function SetupScreen({ defaultQuestions, onStartGame }: SetupScre
     { id: 2, name: 'Team Beta', score: 0, color: PRESET_COLORS[1].class },
     { id: 3, name: 'Team Gamma', score: 0, color: PRESET_COLORS[4].class },
   ]);
-  const [customQuestions, setCustomQuestions] = useState<Question[] | null>(null);
-  const [gridSize, setGridSize] = useState<number>(12);
+  const [customQuestions, setCustomQuestions] = useState<Question[] | null>(() => {
+    try {
+      const saved = localStorage.getItem('catalyst_stored_quiz');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (e) {
+      console.error("Error reading stored quiz from localStorage:", e);
+    }
+    return null;
+  });
+  const [gridSize, setGridSize] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('catalyst_stored_quiz');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return Math.min(12, parsed.length);
+      }
+    } catch {}
+    return 12;
+  });
   const [dragOver, setDragOver] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
+  const [uploadSuccess, setUploadSuccess] = useState<string | null>(() => {
+    try {
+      const saved = localStorage.getItem('catalyst_stored_quiz');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return `Loaded ${parsed.length} cached custom questions from previous session!`;
+      }
+    } catch {}
+    return null;
+  });
 
   // Sync team counts
   const handleNumTeamsChange = (count: number) => {
@@ -108,6 +136,11 @@ export default function SetupScreen({ defaultQuestions, onStartGame }: SetupScre
       }
 
       setCustomQuestions(parsedQuestions);
+      try {
+        localStorage.setItem('catalyst_stored_quiz', JSON.stringify(parsedQuestions));
+      } catch (e) {
+        console.error("Failed to save custom questions to localStorage:", e);
+      }
       // Auto-adjust grid size if total questions is smaller than selected
       if (gridSize > parsedQuestions.length) {
         setGridSize(Math.min(12, parsedQuestions.length));
@@ -176,6 +209,11 @@ export default function SetupScreen({ defaultQuestions, onStartGame }: SetupScre
     setCustomQuestions(null);
     setUploadSuccess(null);
     setUploadError(null);
+    try {
+      localStorage.removeItem('catalyst_stored_quiz');
+    } catch (e) {
+      console.error("Failed to clear cached questions from localStorage:", e);
+    }
   };
 
   const handleStart = () => {
