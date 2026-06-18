@@ -1,0 +1,6 @@
+{
+  "name": "The Cat-a-lyst",
+  "description": "An interactive, cat-infused neon grid trivia game with custom team customization, excel question uploads, sudden-death tiebreakers, and glowing visual themes.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
