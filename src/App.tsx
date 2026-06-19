@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { HelpCircle, RefreshCw, Star, Info, Volume2, Award, FileText, ArrowRight, Zap, CheckCircle2 } from 'lucide-react';
+import { HelpCircle, RefreshCw, Star, Info, Volume2, Award, FileText, ArrowRight, Zap, CheckCircle2, User, LogIn, LogOut, ShieldAlert } from 'lucide-react';
 
 import { defaultQuestions } from './data/defaultQuestions';
 import { Team, Question, GamePhase } from './types';
@@ -8,12 +8,47 @@ import SetupScreen from './components/SetupScreen';
 import QuestionModal from './components/QuestionModal';
 import VictoryScreen from './components/VictoryScreen';
 import { CyberCat, CosmicCat, DJNeonCat } from './components/NeonCats';
+import { loadDatabase, subscribeToDatabase, DatabaseState } from './lib/jsonbin';
+import AuthModal from './components/AuthModal';
 
 export default function App() {
   const [phase, setPhase] = useState<GamePhase>('setup');
   const [teams, setTeams] = useState<Team[]>([]);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [gridCount, setGridCount] = useState<number>(12);
+
+  // Auth and JSONBin synced database state
+  const [currentUser, setCurrentUser] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('catalyst_logged_in_user') || null;
+    } catch {
+      return null;
+    }
+  });
+  const [dbState, setDbState] = useState<DatabaseState>({ users: [], quizzes: [] });
+  const [showAuthModal, setShowAuthModal] = useState(false);
+
+  useEffect(() => {
+    loadDatabase().then((db) => {
+      setDbState(db);
+    });
+    const unsubscribe = subscribeToDatabase((db) => {
+      setDbState(db);
+    });
+    return unsubscribe;
+  }, []);
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    localStorage.removeItem('catalyst_logged_in_user');
+    triggerAlert("Logged out of squad portal.", 'info');
+  };
+
+  const handleLoginSuccess = (username: string) => {
+    setCurrentUser(username);
+    localStorage.setItem('catalyst_logged_in_user', username);
+    triggerAlert(`Access granted. Welcome, Captain ${username}!`, 'success');
+  };
 
   // Confirm state for resetting (vypassing iframe window.confirm block)
   const [confirmReset, setConfirmReset] = useState(false);
@@ -188,15 +223,15 @@ export default function App() {
   return (
     <div id="trivia-app-root" className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-800 to-pink-700 text-slate-100 flex flex-col font-sans selection:bg-indigo-500 selection:text-white select-none">
       
-      {/* Alert Banner overlays */}
-      <div className="fixed top-4 right-4 z-50 pointer-events-none max-w-sm w-full space-y-2">
+      {/* Alert Banner overlays (Moved left to prevent overlapping right header buttons!) */}
+      <div className="fixed top-4 left-4 z-50 pointer-events-none max-w-sm w-full space-y-2">
         <AnimatePresence>
           {systemAlert && (
             <motion.div
               id="alert-banner"
-              initial={{ opacity: 0, x: 50, scale: 0.9 }}
+              initial={{ opacity: 0, x: -50, scale: 0.9 }}
               animate={{ opacity: 1, x: 0, scale: 1 }}
-              exit={{ opacity: 0, x: 50, scale: 0.9 }}
+              exit={{ opacity: 0, x: -50, scale: 0.9 }}
               className={`p-4 rounded-xl border-l-4 shadow-xl flex items-start gap-3 backdrop-blur-md ${
                 systemAlert.type === 'success'
                   ? 'bg-emerald-950/90 border-emerald-500 text-emerald-200'
@@ -231,21 +266,52 @@ export default function App() {
           </div>
         </div>
 
-        {phase !== 'setup' && (
-          <div className="flex gap-4">
-            <button
-              id="btn-nav-quit"
-              onClick={handleResetActivation}
-              className={`px-5 py-2.5 rounded-xl text-sm font-black tracking-wide uppercase transition-all duration-200 cursor-pointer shadow-lg border ${
-                confirmReset
-                  ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/40 text-black border-yellow-300 animate-pulse'
-                  : 'bg-red-500 hover:bg-red-600 shadow-red-500/30 text-white border-red-400/20'
-              }`}
-            >
-              {confirmReset ? '⚠️ Tab to Confirm Reset' : 'Reset Game'}
-            </button>
+        <div className="flex items-center gap-4">
+          {/* User Session pill */}
+          <div className="bg-black/30 backdrop-blur-sm border border-white/10 rounded-2xl p-1.5 px-3.5 flex items-center gap-3 text-xs sm:text-sm">
+            {currentUser ? (
+              <>
+                <div className="flex items-center gap-1.5 font-bold text-yellow-300">
+                  <User className="w-3.5 h-3.5 text-cyan-300 shrink-0" />
+                  <span className="truncate max-w-[120px]">Leader: {currentUser}</span>
+                </div>
+                <button
+                  id="btn-header-logout"
+                  onClick={handleLogout}
+                  title="Logout"
+                  className="text-gray-400 hover:text-white transition p-1 hover:bg-white/5 rounded cursor-pointer"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                </button>
+              </>
+            ) : (
+              <button
+                id="btn-header-login"
+                onClick={() => setShowAuthModal(true)}
+                className="flex items-center gap-1.5 font-black text-cyan-300 hover:text-cyan-200 uppercase tracking-widest text-[10px] sm:text-xs px-2 py-0.5 transition cursor-pointer"
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                <span>Leader Auth Portal</span>
+              </button>
+            )}
           </div>
-        )}
+
+          {phase !== 'setup' && (
+            <div className="flex gap-4">
+              <button
+                id="btn-nav-quit"
+                onClick={handleResetActivation}
+                className={`px-5 py-2.5 rounded-xl text-sm font-black tracking-wide uppercase transition-all duration-200 cursor-pointer shadow-lg border ${
+                  confirmReset
+                    ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/40 text-black border-yellow-300 animate-pulse'
+                    : 'bg-red-500 hover:bg-red-600 shadow-red-500/30 text-white border-red-400/20'
+                }`}
+              >
+                {confirmReset ? '⚠️ Tab to Confirm Reset' : 'Reset Game'}
+              </button>
+            </div>
+          )}
+        </div>
       </header>
 
       {/* Main Container Content */}
@@ -261,7 +327,14 @@ export default function App() {
               transition={{ duration: 0.3 }}
               className="py-6"
             >
-              <SetupScreen defaultQuestions={defaultQuestions} onStartGame={handleStartGame} />
+              <SetupScreen 
+                defaultQuestions={defaultQuestions} 
+                onStartGame={handleStartGame} 
+                currentUser={currentUser}
+                dbState={dbState}
+                onOpenAuth={() => setShowAuthModal(true)}
+                onLogout={handleLogout}
+              />
             </motion.div>
           )}
 
@@ -479,6 +552,17 @@ export default function App() {
             activeTeam={teams[activeTeamIdx]}
             onAnswerResolved={handleAnswerResolved}
             onDismiss={() => setSelectedQuestion(null)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Auth Modal Overlay */}
+      <AnimatePresence>
+        {showAuthModal && (
+          <AuthModal
+            dbState={dbState}
+            onClose={() => setShowAuthModal(false)}
+            onLoginSuccess={handleLoginSuccess}
           />
         )}
       </AnimatePresence>
