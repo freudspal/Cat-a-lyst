@@ -10,6 +10,7 @@ import VictoryScreen from './components/VictoryScreen';
 import { CyberCat, CosmicCat, DJNeonCat } from './components/NeonCats';
 import { loadDatabase, subscribeToDatabase, DatabaseState } from './lib/jsonbin';
 import AuthModal from './components/AuthModal';
+import SideScoresPanel from './components/SideScoresPanel';
 
 export default function App() {
   const [phase, setPhase] = useState<GamePhase>('setup');
@@ -211,6 +212,12 @@ export default function App() {
       triggerAlert("Used all unused backup questions. Restarting pool list.", 'warn');
       setCurrentTiebreakerIdx(0);
     }
+  };
+
+  const handleScoreAdjust = (teamId: number, delta: number) => {
+    setTeams((prevTeams) =>
+      prevTeams.map((t) => (t.id === teamId ? { ...t, score: t.score + delta } : t))
+    );
   };
 
   const handleResetGame = () => {
@@ -566,6 +573,15 @@ export default function App() {
           />
         )}
       </AnimatePresence>
+
+      {/* Live Side Scores Preview Panel during gameplay */}
+      {(phase === 'playing' || phase === 'tiebreaker') && teams.length > 0 && (
+        <SideScoresPanel
+          teams={teams}
+          activeTeamIdx={activeTeamIdx}
+          onScoreAdjust={handleScoreAdjust}
+        />
+      )}
 
       {/* Bottom Bar Info */}
       <footer id="main-footer" className="p-5 mt-6 border-t border-white/10 flex flex-col sm:flex-row justify-between items-center text-sm font-bold text-white/60 gap-4">
