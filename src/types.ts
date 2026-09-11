@@ -1,5 +1,6 @@
 export interface Question {
   id: number;
+  originalId?: number;
   question: string;
   answer: string;
   tip: string;

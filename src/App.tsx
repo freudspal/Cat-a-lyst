@@ -79,6 +79,7 @@ export default function App() {
   const [tiebreakerPool, setTiebreakerPool] = useState<Question[]>([]);
   const [currentTiebreakerIdx, setCurrentTiebreakerIdx] = useState<number>(0);
   const [tiedTeams, setTiedTeams] = useState<Team[]>([]);
+  const [backupQuestions, setBackupQuestions] = useState<Question[]>([]);
 
   // Sound feedback states (simple visual indicators or mute)
   const [isMuted, setIsMuted] = useState(false);
@@ -86,16 +87,78 @@ export default function App() {
 
   // Launching the game from Setup
   const handleStartGame = (configuredTeams: Team[], loadedQuestions: Question[], count: number) => {
-    // Fisher-Yates shuffle the loaded questions to draw randomly to fill the grid,
-    // and provide random backup questions for tiebreaker sudden-death
-    const shuffledQuestions = [...loadedQuestions];
-    for (let i = shuffledQuestions.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffledQuestions[i], shuffledQuestions[j]] = [shuffledQuestions[j], shuffledQuestions[i]];
+    const sourceQuestions = loadedQuestions.length > 0 ? loadedQuestions : defaultQuestions;
+    const totalAvailable = sourceQuestions.length;
+
+    let finalGridQuestions: Question[] = [];
+    let tiebreakerUnused: Question[] = [];
+
+    if (totalAvailable >= count) {
+      // 1. Grid is large enough to incorporate all or a subset of questions WITHOUT duplication:
+      // "ensure that if the grid is large enough to incorporate all the questions you do not duplicate them"
+      // "if ther are more guestions thne the size of the grid, draw randomly form the questions but do not duplicate"
+      const shuffled = [...sourceQuestions];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+
+      // Draw exactly 'count' unique questions with ZERO duplicates
+      finalGridQuestions = shuffled.slice(0, count).map((q, idx) => ({
+        ...q,
+        id: idx + 1,
+        originalId: q.id
+      }));
+
+      // Any remaining questions not drawn for the grid are kept as primary tiebreaker questions
+      tiebreakerUnused = shuffled.slice(count);
+    } else {
+      // 2. Number of questions is smaller than the chosen grid size:
+      // "only duplicate if the number of questions smaller than the chosen grid"
+      // Incorporate all questions, and duplicate until 'count' blocks are filled
+      const accumulated: Question[] = [];
+
+      while (accumulated.length < count) {
+        const shuffledCycle = [...sourceQuestions];
+        for (let i = shuffledCycle.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [shuffledCycle[i], shuffledCycle[j]] = [shuffledCycle[j], shuffledCycle[i]];
+        }
+        for (const q of shuffledCycle) {
+          if (accumulated.length < count) {
+            accumulated.push(q);
+          } else {
+            break;
+          }
+        }
+      }
+
+      // Shuffle the assembled grid questions again so duplicates are distributed randomly across the board
+      for (let i = accumulated.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [accumulated[i], accumulated[j]] = [accumulated[j], accumulated[i]];
+      }
+
+      // Assign a unique id (idx + 1) to each block on the board
+      // so solving one duplicate block does NOT solve the other instance
+      finalGridQuestions = accumulated.map((q, idx) => ({
+        ...q,
+        id: idx + 1,
+        originalId: q.id
+      }));
+
+      // For tiebreakers, full pool shuffled
+      const tiebreakerCopy = [...sourceQuestions];
+      for (let i = tiebreakerCopy.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [tiebreakerCopy[i], tiebreakerCopy[j]] = [tiebreakerCopy[j], tiebreakerCopy[i]];
+      }
+      tiebreakerUnused = tiebreakerCopy;
     }
 
     setTeams(configuredTeams);
-    setQuestions(shuffledQuestions);
+    setQuestions(finalGridQuestions);
+    setBackupQuestions(tiebreakerUnused);
     setGridCount(count);
     
     // Reset gameplay state
@@ -103,7 +166,12 @@ export default function App() {
     setClickedQuestions([]);
     setSelectedQuestion(null);
     setPhase('playing');
-    triggerAlert(`Game started! ${configuredTeams[0].name} goes first to pick a number!`, 'success');
+
+    if (totalAvailable < count) {
+      triggerAlert(`Game started! Populated all ${count} blocks (${totalAvailable} pool questions with random duplicates). ${configuredTeams[0].name} goes first!`, 'info');
+    } else {
+      triggerAlert(`Game started! ${count} unique questions drawn from ${totalAvailable} without duplicates. ${configuredTeams[0].name} goes first!`, 'success');
+    }
   };
 
   const triggerAlert = (msg: string, type: 'success' | 'info' | 'warn' = 'info') => {
@@ -177,11 +245,14 @@ export default function App() {
       // Tie breaker phase
       setTiedTeams(winningTeams);
       
-      // Load remaining questions from pool that were NOT in the grid
-      const gridIds = questions.slice(0, gridCount).map(q => q.id);
-      const remainingUnused = questions.filter(q => !gridIds.includes(q.id));
+      const pool = backupQuestions.length > 0 ? backupQuestions : questions;
+      const shuffledTiebreaker = [...pool];
+      for (let i = shuffledTiebreaker.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffledTiebreaker[i], shuffledTiebreaker[j]] = [shuffledTiebreaker[j], shuffledTiebreaker[i]];
+      }
       
-      setTiebreakerPool(remainingUnused.length > 0 ? remainingUnused : questions);
+      setTiebreakerPool(shuffledTiebreaker);
       setCurrentTiebreakerIdx(0);
       
       triggerAlert("It's a TIE! Sudden death tiebreaker round activated!", 'warn');
