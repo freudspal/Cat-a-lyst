@@ -107,20 +107,6 @@ export default function SetupScreen({
   const activeQuestions = getActiveQuizQuestions();
   const totalQuestionsAvailable = activeQuestions.length;
 
-  // Sync grid dimensions limit if active dataset is smaller than current selection
-  useEffect(() => {
-    if (gridSize > totalQuestionsAvailable) {
-      // Find nearest smaller supported size if possible
-      const sizes = [9, 12, 16, 20, 24, 30];
-      const valid = sizes.filter(s => s <= totalQuestionsAvailable);
-      if (valid.length > 0) {
-        setGridSize(valid[valid.length - 1]);
-      } else {
-        setGridSize(totalQuestionsAvailable);
-      }
-    }
-  }, [selectedQuizId, totalQuestionsAvailable]);
-
   // Adjust team count
   const handleNumTeamsChange = (count: number) => {
     setNumTeams(count);
@@ -376,7 +362,7 @@ export default function SetupScreen({
   };
 
   const handleStart = () => {
-    onStartGame(teamList, activeQuestions, Math.min(gridSize, totalQuestionsAvailable));
+    onStartGame(teamList, activeQuestions, gridSize);
   };
 
   // Filters for public / private databases
@@ -935,33 +921,51 @@ export default function SetupScreen({
 
           {/* Grid Settings Block - Rebranded to Question Database */}
           <div id="grid-settings" className="bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 p-6 flex flex-col space-y-4 shadow-xl">
-            <h2 className="font-display text-xl font-bold text-white flex items-center gap-2 uppercase tracking-wide">
-              <Info className="w-5 h-5 text-yellow-300" />
-              Grid Dimensions
-            </h2>
-            <p className="text-xs text-yellow-101/80 font-medium leading-relaxed">
-              Select active blocks for the match. If the selected questions database ({totalQuestionsAvailable} total Qs) is smaller than the grid block scale, values will downscale automatically.
+            <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
+              <h2 className="font-display text-xl font-bold text-white flex items-center gap-2 uppercase tracking-wide">
+                <Info className="w-5 h-5 text-yellow-300" />
+                Grid Dimensions
+              </h2>
+              <span className="text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-cyan-400/15 border border-cyan-400/30 text-cyan-200 font-bold uppercase tracking-wider">
+                {totalQuestionsAvailable} Qs in Pool
+              </span>
+            </div>
+
+            <p className="text-xs font-medium leading-relaxed">
+              {totalQuestionsAvailable >= gridSize ? (
+                <span className="text-emerald-300">
+                  ✓ Pool has {totalQuestionsAvailable} questions. Exactly {gridSize} will be drawn randomly with <strong>no duplicates</strong>.
+                </span>
+              ) : (
+                <span className="text-amber-300">
+                  ⚡ Pool has {totalQuestionsAvailable} questions. All {totalQuestionsAvailable} will be included, and duplicated randomly to populate all {gridSize} grid blocks.
+                </span>
+              )}
             </p>
 
             <div className="grid grid-cols-3 gap-2">
               {[9, 12, 16, 20, 24, 30].map((size) => {
-                const disabled = size > totalQuestionsAvailable;
+                const willDuplicate = totalQuestionsAvailable < size;
+                const isSelected = gridSize === size;
+
                 return (
                   <button
                     key={size}
                     id={`btn-gridsize-${size}`}
                     type="button"
-                    disabled={disabled}
                     onClick={() => setGridSize(size)}
-                    className={`p-2.5 rounded-xl font-mono text-xs font-bold border transition ${
-                      disabled
-                        ? 'opacity-20 border-white/10 bg-black/40 text-white/20 cursor-not-allowed'
-                        : gridSize === size
-                        ? 'border-yellow-400 bg-yellow-400/20 text-yellow-200 font-extrabold'
-                        : 'border-white/15 bg-black/25 text-white/80 hover:border-white/40 hover:text-white cursor-pointer'
+                    className={`p-2.5 rounded-xl font-mono text-xs font-bold border transition flex flex-col items-center justify-center gap-0.5 cursor-pointer ${
+                      isSelected
+                        ? 'border-yellow-400 bg-yellow-400/20 text-yellow-200 font-extrabold shadow-md'
+                        : 'border-white/15 bg-black/25 text-white/80 hover:border-white/40 hover:text-white'
                     }`}
                   >
-                    {size} Blocks
+                    <span>{size} Blocks</span>
+                    {willDuplicate && (
+                      <span className="text-[9px] font-sans font-medium text-amber-300/80">
+                        (Repeats Qs)
+                      </span>
+                    )}
                   </button>
                 );
               })}
